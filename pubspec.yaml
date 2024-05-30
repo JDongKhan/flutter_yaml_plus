@@ -1,6 +1,6 @@
 name: flutter_yaml_plus
-description: A package which simplifies the task of updating your Flutter app's launcher icon.
-version: 0.13.1
+description: pubspec.yaml增强.
+version: 0.0.1
 maintainer: Mark O'Sullivan (@MarkOSullivan94)
 homepage: https://github.com/JDongKhan/flutter_yaml_plus.git
 repository: https://github.com/JDongKhan/flutter_yaml_plus.git
