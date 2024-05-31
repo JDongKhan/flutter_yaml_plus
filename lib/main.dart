@@ -1,12 +1,13 @@
 // ignore_for_file: public_member_api_docs
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
 import 'package:path/path.dart' as path;
-import 'package:yaml/yaml.dart';
 import 'package:yaml_modify/yaml_modify.dart';
+
 import 'src/utils/config_file.dart';
 
 const String fileOption = 'file';
@@ -14,6 +15,10 @@ const String helpFlag = 'help';
 const String verboseFlag = 'verbose';
 const String defaultConfigFile = '.pubspec.yaml';
 const String flavorConfigFilePattern = r'^.pubspec(.*).yaml$';
+
+
+Directory projectDirectory = Directory.current;
+
 
 String? getFilePath() {
   for (var item in Directory('.').listSync()) {
@@ -29,7 +34,6 @@ String? getFilePath() {
 }
 
 File? _getPubSpecYamlPath() {
-  Directory projectDirectory = Directory.current;
   //查找父目录是否是跟目录
   while (!Directory(path.join(projectDirectory.path, 'lib')).existsSync()) {
     projectDirectory = projectDirectory.parent;
@@ -101,4 +105,35 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   //保存
   final strYaml = toYamlString(modifiable);
   pubspecFile.writeAsStringSync(strYaml);
+
+
+  //重新run pub get
+  await run('cd ${projectDirectory.path} && flutter clean ');
+  await Future<dynamic>.delayed(const Duration(seconds: 1));
+  await run('cd ${projectDirectory.path} && flutter create . && flutter pub get ');
+}
+
+
+
+///执行脚本
+Future<int> run(
+    String script, {
+      String? workingDirectory,
+      Map<String, String>? environment,
+      bool includeParentEnvironment = true,
+      bool runInShell = true,
+      ProcessStartMode mode = ProcessStartMode.normal,
+      bool isPrint = true,
+    }) async {
+  print(script);
+  final Process result = await Process.start('sh', ['-c', script]);
+  result.stdout.listen((out) {
+    if (isPrint) {
+      print(utf8.decode(out));
+    }
+  });
+  result.stderr.listen((err) {
+    print(utf8.decode(err));
+  });
+  return result.exitCode;
 }
