@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:checked_yaml/checked_yaml.dart' as yaml;
-import '../custom_exceptions.dart';
 
 /// @author jd
 
@@ -30,7 +29,7 @@ class ConfigFile {
         allowNull: true,
       );
     } on yaml.ParsedYamlException catch (e) {
-      throw InvalidConfigException(e.formattedMessage);
+      throw Exception(e.formattedMessage);
     } catch (e) {
       rethrow;
     }
