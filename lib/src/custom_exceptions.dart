@@ -1,4 +1,4 @@
-import 'package:flutter_yaml_plus/utils.dart';
+import 'utils.dart';
 
 /// Exception to be thrown whenever we have an invalid configuration
 class InvalidConfigException implements Exception {

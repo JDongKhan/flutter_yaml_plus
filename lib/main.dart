@@ -3,15 +3,14 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:flutter_yaml_plus/logger.dart';
-import 'package:flutter_yaml_plus/utils/config_file.dart';
+import 'package:flutter_yaml_plus/src/logger.dart';
+import 'src/utils/config_file.dart';
 import 'package:path/path.dart' as path;
 
 const String fileOption = 'file';
 const String helpFlag = 'help';
 const String verboseFlag = 'verbose';
-const String prefixOption = 'prefix';
-const String defaultConfigFile = 'flutter_launcher_icons.yaml';
+const String defaultConfigFile = '.pubspec.yaml';
 const String flavorConfigFilePattern = r'^.pubspec(.*).yaml$';
 
 String? getFilePath() {
@@ -20,7 +19,7 @@ String? getFilePath() {
       final name = path.basename(item.path);
       final match = RegExp(flavorConfigFilePattern).firstMatch(name);
       if (match != null) {
-       return name;
+        return name;
       }
     }
   }
@@ -38,13 +37,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
       help: 'Path to config file',
       defaultsTo: defaultConfigFile,
     )
-    ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false)
-    ..addOption(
-      prefixOption,
-      abbr: 'p',
-      help: 'Generates config in the given path. Only Supports web platform',
-      defaultsTo: '.',
-    );
+    ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
 
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
@@ -59,12 +52,9 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   }
   // Flavors management
   final filePath = getFilePath();
-  final String prefixPath = argResults[prefixOption];
   if (filePath == null) {
     logger.info('未找到.pubspec.yaml文件');
     return;
   }
-  final flutterLauncherIconsConfigs = ConfigFile.loadConfigFromFlavor(filePath, prefixPath);
-
+  final flutterLauncherIconsConfigs = ConfigFile.loadConfigFromPath(filePath);
 }
-
