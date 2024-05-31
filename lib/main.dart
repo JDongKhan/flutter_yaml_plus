@@ -73,22 +73,22 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   // Flavors management
   final filePath = getFilePath();
   if (filePath == null) {
-    logger.info('未找到.pubspec.yaml文件');
+    logger.verbose('未找到.pubspec.yaml文件');
     return;
   }
-  logger.info('找到.pubspec.yaml：$filePath');
+  logger.verbose('找到.pubspec.yaml：$filePath');
   final config = ConfigFile.loadConfigFromPath(filePath);
   if (config == null) {
-    logger.info('$filePath内容不存在');
+    logger.verbose('$filePath内容不存在');
     return;
   }
-  logger.info(config);
+  logger.verbose(config);
   final File? pubspecFile = _getPubSpecYamlPath();
   if (pubspecFile == null) {
-    logger.info('pubspec.yaml不存在');
+    logger.verbose('pubspec.yaml不存在');
     return;
   }
-  logger.info('找到pubspec.yaml：$pubspecFile');
+  logger.verbose('找到pubspec.yaml：$pubspecFile');
   //读取
   final pubspecContent = pubspecFile.readAsStringSync();
   final dynamic pubspecYaml = loadYaml(pubspecContent);
