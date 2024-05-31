@@ -18,7 +18,7 @@ const String flavorConfigFilePattern = r'^.pubspec(.*).yaml$';
 
 
 Directory projectDirectory = Directory.current;
-
+late FLILogger logger;
 
 String? getFilePath() {
   for (var item in Directory('.').listSync()) {
@@ -26,7 +26,7 @@ String? getFilePath() {
       final name = path.basename(item.path);
       final match = RegExp(flavorConfigFilePattern).firstMatch(name);
       if (match != null) {
-        return name;
+        return item.path;
       }
     }
   }
@@ -38,8 +38,6 @@ File? _getPubSpecYamlPath() {
   while (!Directory(path.join(projectDirectory.path, 'lib')).existsSync()) {
     projectDirectory = projectDirectory.parent;
   }
-
-  print('work at $projectDirectory');
   final pubspecFile = File(path.join(projectDirectory.path, 'pubspec.yaml'));
 
   if (!pubspecFile.existsSync()) {
@@ -63,12 +61,12 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
 
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
-  final logger = FLILogger(argResults[verboseFlag]);
+  logger = FLILogger(argResults[verboseFlag]);
 
   logger.verbose('Received args ${argResults.arguments}');
 
   if (argResults[helpFlag]) {
-    stdout.writeln('Generates icons for iOS and Android');
+    stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
     exit(0);
   }
@@ -78,16 +76,19 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     logger.info('未找到.pubspec.yaml文件');
     return;
   }
+  logger.info('找到.pubspec.yaml：$filePath');
   final config = ConfigFile.loadConfigFromPath(filePath);
   if (config == null) {
-    print('.pubspec.yaml不存在');
+    logger.info('$filePath内容不存在');
     return;
   }
+  logger.info(config);
   final File? pubspecFile = _getPubSpecYamlPath();
   if (pubspecFile == null) {
-    print('pubspec.yaml不存在');
+    logger.info('pubspec.yaml不存在');
     return;
   }
+  logger.info('找到pubspec.yaml：$pubspecFile');
   //读取
   final pubspecContent = pubspecFile.readAsStringSync();
   final dynamic pubspecYaml = loadYaml(pubspecContent);
@@ -99,6 +100,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   for (var key in oldDependencies.keys) {
     final dynamic value = newDependencies[key];
     if (value != null) {
+      //这里可以加入自己的逻辑
       oldDependencies[key] = value;
     }
   }
@@ -110,7 +112,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   //重新run pub get
   await run('cd ${projectDirectory.path} && flutter clean ');
   await Future<dynamic>.delayed(const Duration(seconds: 1));
-  await run('cd ${projectDirectory.path} && flutter create . && flutter pub get ');
+  await run('cd ${projectDirectory.path} && flutter pub get ');
 }
 
 
@@ -125,7 +127,7 @@ Future<int> run(
       ProcessStartMode mode = ProcessStartMode.normal,
       bool isPrint = true,
     }) async {
-  print(script);
+  logger.info(script);
   final Process result = await Process.start('sh', ['-c', script]);
   result.stdout.listen((out) {
     if (isPrint) {
