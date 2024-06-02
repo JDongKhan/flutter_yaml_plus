@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
@@ -11,40 +12,14 @@ import 'package:yaml_modify/yaml_modify.dart';
 import 'src/utils/config_file.dart';
 
 const String fileOption = 'file';
+const String urlOption = 'url';
 const String helpFlag = 'help';
 const String verboseFlag = 'verbose';
-const String defaultConfigFile = '.pubspec.yaml';
-const String flavorConfigFilePattern = r'^.pubspec(.*).yaml$';
+const String otherConfigFilePattern = r'^.pubspec(.*).yaml$';
 
 
-Directory projectDirectory = Directory.current;
-late FLILogger logger;
-
-String? getFilePath() {
-  for (var item in Directory('.').listSync()) {
-    if (item is File) {
-      final name = path.basename(item.path);
-      final match = RegExp(flavorConfigFilePattern).firstMatch(name);
-      if (match != null) {
-        return item.path;
-      }
-    }
-  }
-  return null;
-}
-
-File? _getPubSpecYamlPath() {
-  //查找父目录是否是跟目录
-  while (!Directory(path.join(projectDirectory.path, 'lib')).existsSync()) {
-    projectDirectory = projectDirectory.parent;
-  }
-  final pubspecFile = File(path.join(projectDirectory.path, 'pubspec.yaml'));
-
-  if (!pubspecFile.existsSync()) {
-    return null;
-  }
-  return pubspecFile;
-}
+Directory _projectDirectory = Directory.current;
+late FLILogger _logger;
 
 Future<void> modYamlFromArguments(List<String> arguments) async {
   final ArgParser parser = ArgParser(allowTrailingOptions: true);
@@ -55,40 +30,48 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
       fileOption,
       abbr: 'f',
       help: 'Path to config file',
-      defaultsTo: defaultConfigFile,
+      defaultsTo: null,
+    )
+    ..addOption(
+      urlOption,
+      abbr: 'u',
+      help: 'url to config file',
+      defaultsTo: null,
     )
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
 
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
-  logger = FLILogger(argResults[verboseFlag]);
+  _logger = FLILogger(argResults[verboseFlag]);
 
-  logger.verbose('Received args ${argResults.arguments}');
+  _logger.verbose('Received args ${argResults.arguments}');
 
   if (argResults[helpFlag]) {
     stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
     exit(0);
   }
-  // Flavors management
-  final filePath = getFilePath();
-  if (filePath == null) {
-    logger.verbose('未找到.pubspec.yaml文件');
-    return;
+
+  final String? url = argResults[urlOption];
+  Map? config;
+  if (url?.isNotEmpty  == true) {
+    config = await _loadConfigFromUrl(url!);
+  } else {
+    String? filePath = argResults[fileOption];
+    filePath ??= _getFilePath();
+    config = _loadConfigFromFile(filePath);
   }
-  logger.verbose('找到.pubspec.yaml：$filePath');
-  final config = ConfigFile.loadConfigFromPath(filePath);
   if (config == null) {
-    logger.verbose('$filePath内容不存在');
+    _logger.verbose('配置获取失败');
     return;
   }
-  logger.verbose(config);
+  //查找项目的pubspec.yaml
   final File? pubspecFile = _getPubSpecYamlPath();
   if (pubspecFile == null) {
-    logger.verbose('pubspec.yaml不存在');
+    _logger.verbose('pubspec.yaml不存在');
     return;
   }
-  logger.verbose('找到pubspec.yaml：$pubspecFile');
+  _logger.verbose('找到pubspec.yaml：$pubspecFile');
   //读取
   final pubspecContent = pubspecFile.readAsStringSync();
   final dynamic pubspecYaml = loadYaml(pubspecContent);
@@ -110,11 +93,10 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
 
 
   //重新run pub get
-  await run('cd ${projectDirectory.path} && flutter clean ');
+  await run('cd ${_projectDirectory.path} && flutter clean ');
   await Future<dynamic>.delayed(const Duration(seconds: 1));
-  await run('cd ${projectDirectory.path} && flutter pub get ');
+  await run('cd ${_projectDirectory.path} && flutter pub get ');
 }
-
 
 
 ///执行脚本
@@ -127,7 +109,7 @@ Future<int> run(
       ProcessStartMode mode = ProcessStartMode.normal,
       bool isPrint = true,
     }) async {
-  logger.info(script);
+  _logger.info(script);
   final Process result = await Process.start('sh', ['-c', script]);
   result.stdout.listen((out) {
     if (isPrint) {
@@ -139,3 +121,59 @@ Future<int> run(
   });
   return result.exitCode;
 }
+
+
+Future<Map?> _loadConfigFromUrl(String url) async {
+  final Dio dio = Dio();
+  final Response response = await dio.get(url);
+  final Map data = response.data;
+  final bool? success = data['success'];
+  if (success != true) {
+    return null;
+  }
+  return data['data'];
+}
+
+
+Map? _loadConfigFromFile(String? filePath){
+  if (filePath == null) {
+    _logger.verbose('未找到.pubspec.yaml文件');
+    return null;
+  }
+  _logger.verbose('找到.pubspec.yaml：$filePath');
+  final config = ConfigFile.loadConfigFromPath(filePath);
+  if (config == null) {
+    _logger.verbose('$filePath内容不存在');
+    return null;
+  }
+  _logger.verbose(config);
+  return config;
+}
+
+
+String? _getFilePath() {
+  for (var item in Directory('.').listSync()) {
+    if (item is File) {
+      final name = path.basename(item.path);
+      final match = RegExp(otherConfigFilePattern).firstMatch(name);
+      if (match != null) {
+        return item.path;
+      }
+    }
+  }
+  return null;
+}
+
+File? _getPubSpecYamlPath() {
+  //查找父目录是否是跟目录
+  while (!Directory(path.join(_projectDirectory.path, 'lib')).existsSync()) {
+    _projectDirectory = _projectDirectory.parent;
+  }
+  final pubspecFile = File(path.join(_projectDirectory.path, 'pubspec.yaml'));
+
+  if (!pubspecFile.existsSync()) {
+    return null;
+  }
+  return pubspecFile;
+}
+

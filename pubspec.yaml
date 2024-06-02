@@ -12,8 +12,8 @@ dependencies:
   path: ^1.8.2
   yaml: ^3.1.1
   yaml_modify: ^1.0.1
+  dio: ^4.0.6
 environment: 
   sdk: '>=2.18.0 <4.0.0'
 dev_dependencies: 
   build_runner: ^2.3.3
-  #build_version: ^2.1.1
