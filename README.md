@@ -6,4 +6,4 @@
     path: ../
 ```
 
-2、flutter pub run flutter_yaml_plus
+2、flutter pub run flutter_yaml_plus  --help
