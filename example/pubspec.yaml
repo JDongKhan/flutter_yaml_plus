@@ -10,12 +10,14 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.3
-  flutter_yaml_plus:
-    path: ../
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  flutter_yaml_plus:
+    path: ../
 
 flutter:
   uses-material-design: true
