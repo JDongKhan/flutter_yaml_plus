@@ -8,11 +8,7 @@ class ConfigFile {
 
   /// Loads flutter launcher icons configs from given [filePath]
   static Map? loadConfigFromPath(String filePath) {
-    return _getConfigFromPubspecYaml(pathToPubspecYamlFile: filePath);
-  }
-
-  static Map? _getConfigFromPubspecYaml({required String pathToPubspecYamlFile}) {
-    final configFile = File(pathToPubspecYamlFile);
+    final configFile = File(filePath);
     if (!configFile.existsSync()) {
       return null;
     }
@@ -35,3 +31,4 @@ class ConfigFile {
     }
   }
 }
+

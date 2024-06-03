@@ -6,10 +6,11 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
+import 'package:flutter_yaml_plus/src/pubspec_parser.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
 
-import 'src/utils/config_file.dart';
+import 'src/config_file.dart';
 
 const String fileOption = 'file';
 const String urlOption = 'url';
@@ -73,8 +74,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   }
   _logger.verbose('找到pubspec.yaml：$pubspecFile');
   //读取
-  final pubspecContent = pubspecFile.readAsStringSync();
-  final dynamic pubspecYaml = loadYaml(pubspecContent);
+  final dynamic pubspecYaml = PubspecParser.fromFileToMap(pubspecFile);
   final dynamic modifiable = getModifiableNode(pubspecYaml);
 
   //修改
@@ -90,7 +90,6 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   //保存
   final strYaml = toYamlString(modifiable);
   pubspecFile.writeAsStringSync(strYaml);
-
 
   //重新run pub get
   await run('cd ${_projectDirectory.path} && flutter clean ');
@@ -150,7 +149,7 @@ Map? _loadConfigFromFile(String? filePath){
   return config;
 }
 
-
+///查找项目里面有没有自定义配置文件
 String? _getFilePath() {
   for (var item in Directory('.').listSync()) {
     if (item is File) {
@@ -164,6 +163,7 @@ String? _getFilePath() {
   return null;
 }
 
+///查找项目的dart项目配置文件
 File? _getPubSpecYamlPath() {
   //查找父目录是否是跟目录
   while (!Directory(path.join(_projectDirectory.path, 'lib')).existsSync()) {
