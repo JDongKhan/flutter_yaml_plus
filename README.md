@@ -14,4 +14,4 @@ or
 
 build app
 
-dart compile exe bin/main.dart -o pubspec_plus
+dart compile exe bin/flutter_yaml_plus.dart -o pubspec_plus
