@@ -1,5 +1,6 @@
 // ignore_for_file: public_member_api_docs
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,7 @@ import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
+
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
@@ -42,12 +44,12 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     )
     ..addOption(
       pubspecOption,
-      abbr: 's',
+      abbr: 'p',
       help: '指定修改的pubspec.yaml路径',
       defaultsTo: null,
     )
-    ..addFlag(needCleanOption, help: 'clean 项目', defaultsTo: false)
-    ..addFlag(needGetOption, help: 'get 项目', defaultsTo: false)
+    ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
+    ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
@@ -58,36 +60,77 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     stdout.writeln(parser.usage);
     exit(0);
   }
+  await _start(argResults).catchError((onError) {
+    _logger.error(onError.toString());
+  });
+}
 
+Future<void> _start(ArgResults argResults) async {
+  //远端配置
   final String? url = argResults[urlOption];
   Map? config;
-  if (url?.isNotEmpty  == true) {
+  if (url?.isNotEmpty == true) {
     config = await _loadConfigFromUrl(url!);
   } else {
+    //本地配置
     String? filePath = argResults[fileOption];
     filePath ??= _getFilePath();
     config = _loadConfigFromFile(filePath);
   }
   if (config == null) {
-    _logger.verbose('配置获取失败');
+    _logger.error('配置获取失败');
     return;
   }
+  _logger.verbose(config);
+  //pubspec地址
   final String? pubspecFilePath = argResults[pubspecOption];
-  File? pubspecFile;
-  if (pubspecFilePath != null){
-    pubspecFile = File(pubspecFilePath);
+  final List<File> fileList = [];
+  if (pubspecFilePath != null) {
+    final Directory directory = Directory(pubspecFilePath);
+    if (directory.existsSync()) {
+      final String? c = await run('find $pubspecFilePath -name pubspec.yaml');
+      if (c != null) {
+        final List<String> list = c.split('\n');
+        fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
+      }
+    } else {
+      fileList.add(File(pubspecFilePath));
+    }
   }
-  //查找项目的pubspec.yaml
-  pubspecFile ??= _getPubSpecYamlPath();
-  if (pubspecFile == null) {
-    _logger.verbose('pubspec.yaml:$pubspecFile不存在');
-    return;
+
+  //默认
+  if (fileList.isEmpty) {
+    final File? p = _getPubSpecYamlPath();
+    _logger.verbose('找到pubspec.yaml：$p');
+    if (p != null) {
+      fileList.add(p);
+    }
   }
-  _logger.verbose('找到pubspec.yaml：$pubspecFile');
+
+  ///修改文件
+  for (var element in fileList) {
+    _logger.info('开始修改：$element');
+    _modPubspec(element, config);
+  }
+  //clean && pub get
+  final bool needClean = argResults[needCleanOption];
+  final bool needGet = argResults[needGetOption];
+  for (var element in fileList) {
+    //重新run pub get
+    if (needClean == true) {
+      await run('cd ${element.parent.path} && flutter clean ');
+      await Future<dynamic>.delayed(const Duration(seconds: 2));
+    }
+    if (needGet == true) {
+      await run('cd ${element.parent.path} && flutter pub get ');
+    }
+  }
+}
+
+void _modPubspec(File pubspecFile, Map config) {
   //读取
   final dynamic pubspecYaml = PubspecParser.fromFileToMap(pubspecFile);
   final dynamic modifiable = getModifiableNode(pubspecYaml);
-
   //修改dependencies
   _modConfig(config, modifiable, 'dependencies');
   //修改dependency_overrides
@@ -97,20 +140,10 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   //保存
   final strYaml = toYamlString(modifiable);
   pubspecFile.writeAsStringSync(strYaml);
-
-  final bool needClean = argResults[needCleanOption];
-  final bool needGet = argResults[needGetOption];
-  //重新run pub get
-  if (needClean == true) {
-    await run('cd ${_projectDirectory.path} && flutter clean ');
-    await Future<dynamic>.delayed(const Duration(seconds: 1));
-  }
-  if (needGet == true) {
-    await run('cd ${_projectDirectory.path} && flutter pub get ');
-  }
+  _logger.verbose('保存$pubspecFile');
 }
 
-void _modConfig(Map config,dynamic modifiable,String key){
+void _modConfig(Map config, dynamic modifiable, String key) {
   final Map? newDependencies = config[key];
   final Map? oldDependencies = modifiable[key];
   if (newDependencies == null) {
@@ -122,10 +155,10 @@ void _modConfig(Map config,dynamic modifiable,String key){
     return;
   }
   for (var key in oldDependencies.keys) {
-    final YamlMap? value = newDependencies[key];
+    final dynamic value = newDependencies[key];
     // _logger.verbose('检测$key是否需要修改');
     if (value != null) {
-      final dynamic newValue  = _handleVarMap(value);
+      final dynamic newValue = _handleVarMap(value);
       _logger.verbose('即将修改$key $newValue');
       //这里可以加入自己的逻辑
       oldDependencies[key] = newValue;
@@ -133,7 +166,7 @@ void _modConfig(Map config,dynamic modifiable,String key){
   }
 }
 
-dynamic _handleVarMap(dynamic value){
+dynamic _handleVarMap(dynamic value) {
   if (value is YamlMap) {
     final Map map = {};
     value.forEach((key, value) {
@@ -141,14 +174,13 @@ dynamic _handleVarMap(dynamic value){
     });
     return map;
   }
- if (value is double) {
-   return value.toString();
- }
- return value ?? '';
+  if (value is double) {
+    return value.toString();
+  }
+  return value ?? '';
 }
 
-
-void _copyConfig(Map config,dynamic modifiable,String key){
+void _copyConfig(Map config, dynamic modifiable, String key) {
   final Map? newDependencies = config[key];
   if (newDependencies == null) {
     _logger.verbose('配置文件未找到$key节点，请修改');
@@ -157,30 +189,42 @@ void _copyConfig(Map config,dynamic modifiable,String key){
   modifiable[key] = newDependencies;
 }
 
-
 ///执行脚本
-Future<int> run(
-    String script, {
-      String? workingDirectory,
-      Map<String, String>? environment,
-      bool includeParentEnvironment = true,
-      bool runInShell = true,
-      ProcessStartMode mode = ProcessStartMode.normal,
-      bool isPrint = true,
-    }) async {
+Future<String?> run(
+  String script, {
+  String? workingDirectory,
+  Map<String, String>? environment,
+  bool includeParentEnvironment = true,
+  bool runInShell = true,
+  ProcessStartMode mode = ProcessStartMode.normal,
+}) async {
   _logger.info(script);
+  final Completer<String?> completer = Completer();
   final Process result = await Process.start('sh', ['-c', script]);
+  final StringBuffer stringBuffer = StringBuffer();
   result.stdout.listen((out) {
-    if (isPrint) {
-      print(utf8.decode(out));
+    final String text = utf8.decode(out);
+    _logger.verbose(text);
+    stringBuffer.writeln(text);
+  }, onDone: () {
+    if (!completer.isCompleted) {
+      completer.complete(stringBuffer.toString());
+    }
+  }, onError: (error) {
+    if (!completer.isCompleted) {
+      completer.completeError(error);
     }
   });
   result.stderr.listen((err) {
-    print(utf8.decode(err));
+    if (!completer.isCompleted) {
+      completer.completeError(err);
+    }
+    final String text = utf8.decode(err);
+    _logger.error(text);
   });
-  return result.exitCode;
+  await result.exitCode;
+  return completer.future;
 }
-
 
 Future<Map?> _loadConfigFromUrl(String url) async {
   final Dio dio = Dio();
@@ -193,8 +237,7 @@ Future<Map?> _loadConfigFromUrl(String url) async {
   return data['data'];
 }
 
-
-Map? _loadConfigFromFile(String? filePath){
+Map? _loadConfigFromFile(String? filePath) {
   _logger.verbose('开始查找本地配置文件');
   if (filePath == null) {
     _logger.verbose('未找到本地配置文件');
@@ -206,7 +249,6 @@ Map? _loadConfigFromFile(String? filePath){
     _logger.verbose('$filePath内容不存在');
     return null;
   }
-  _logger.verbose(config);
   return config;
 }
 

@@ -13,9 +13,6 @@ dependencies:
   yaml: ^3.1.1
   yaml_modify: ^1.0.1
   dio: ^4.0.6
-  test: 
-    git: 
-      ref: '1.0'
 environment: 
   sdk: '>=2.18.0 <4.0.0'
 dev_dependencies: 
