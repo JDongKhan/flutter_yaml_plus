@@ -1,2 +1,6 @@
+versions:
+  version1: &foundation_version 1.0
 dependencies:
-  test: 2
+  test:
+    git:
+      ref: *foundation_version

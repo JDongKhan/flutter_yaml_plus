@@ -11,13 +11,14 @@ import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
-
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
 const String verboseFlag = 'verbose';
 const String otherConfigFilePattern = r'^.pubspec(.*).yaml$';
-
+const String pubspecOption = 'pubspec';
+const String needCleanOption = 'clean';
+const String needGetOption = 'get';
 
 Directory _projectDirectory = Directory.current;
 late FLILogger _logger;
@@ -30,23 +31,28 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     ..addOption(
       fileOption,
       abbr: 'f',
-      help: 'Path to config file',
+      help: '本地配置文件',
       defaultsTo: null,
     )
     ..addOption(
       urlOption,
       abbr: 'u',
-      help: 'url to config file',
+      help: '配置文件的远程地址',
       defaultsTo: null,
     )
+    ..addOption(
+      pubspecOption,
+      abbr: 's',
+      help: '指定修改的pubspec.yaml路径',
+      defaultsTo: null,
+    )
+    ..addFlag(needCleanOption, help: 'clean 项目', defaultsTo: false)
+    ..addFlag(needGetOption, help: 'get 项目', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
-
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
   _logger = FLILogger(argResults[verboseFlag]);
-
   _logger.verbose('Received args ${argResults.arguments}');
-
   if (argResults[helpFlag]) {
     stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
@@ -66,10 +72,15 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     _logger.verbose('配置获取失败');
     return;
   }
+  final String? pubspecFilePath = argResults[pubspecOption];
+  File? pubspecFile;
+  if (pubspecFilePath != null){
+    pubspecFile = File(pubspecFilePath);
+  }
   //查找项目的pubspec.yaml
-  final File? pubspecFile = _getPubSpecYamlPath();
+  pubspecFile ??= _getPubSpecYamlPath();
   if (pubspecFile == null) {
-    _logger.verbose('pubspec.yaml不存在');
+    _logger.verbose('pubspec.yaml:$pubspecFile不存在');
     return;
   }
   _logger.verbose('找到pubspec.yaml：$pubspecFile');
@@ -77,24 +88,73 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   final dynamic pubspecYaml = PubspecParser.fromFileToMap(pubspecFile);
   final dynamic modifiable = getModifiableNode(pubspecYaml);
 
-  //修改
-  final Map newDependencies = config['dependencies'];
-  final Map oldDependencies = modifiable['dependencies'];
-  for (var key in oldDependencies.keys) {
-    final dynamic value = newDependencies[key];
-    if (value != null) {
-      //这里可以加入自己的逻辑
-      oldDependencies[key] = value;
-    }
-  }
+  //修改dependencies
+  _modConfig(config, modifiable, 'dependencies');
+  //修改dependency_overrides
+  _modConfig(config, modifiable, 'dependency_overrides');
+  //拷贝将versions全部拷贝过去
+  // _copyConfig(config, modifiable, 'versions');
   //保存
   final strYaml = toYamlString(modifiable);
   pubspecFile.writeAsStringSync(strYaml);
 
+  final bool needClean = argResults[needCleanOption];
+  final bool needGet = argResults[needGetOption];
   //重新run pub get
-  await run('cd ${_projectDirectory.path} && flutter clean ');
-  await Future<dynamic>.delayed(const Duration(seconds: 1));
-  await run('cd ${_projectDirectory.path} && flutter pub get ');
+  if (needClean == true) {
+    await run('cd ${_projectDirectory.path} && flutter clean ');
+    await Future<dynamic>.delayed(const Duration(seconds: 1));
+  }
+  if (needGet == true) {
+    await run('cd ${_projectDirectory.path} && flutter pub get ');
+  }
+}
+
+void _modConfig(Map config,dynamic modifiable,String key){
+  final Map? newDependencies = config[key];
+  final Map? oldDependencies = modifiable[key];
+  if (newDependencies == null) {
+    _logger.verbose('配置文件未找到$key节点，请修改');
+    return;
+  }
+  if (oldDependencies == null) {
+    _logger.verbose('pubspec.yaml未找到$key节点，请修改');
+    return;
+  }
+  for (var key in oldDependencies.keys) {
+    final YamlMap? value = newDependencies[key];
+    // _logger.verbose('检测$key是否需要修改');
+    if (value != null) {
+      final dynamic newValue  = _handleVarMap(value);
+      _logger.verbose('即将修改$key $newValue');
+      //这里可以加入自己的逻辑
+      oldDependencies[key] = newValue;
+    }
+  }
+}
+
+dynamic _handleVarMap(dynamic value){
+  if (value is YamlMap) {
+    final Map map = {};
+    value.forEach((key, value) {
+      map[key] = _handleVarMap(value);
+    });
+    return map;
+  }
+ if (value is double) {
+   return value.toString();
+ }
+ return value ?? '';
+}
+
+
+void _copyConfig(Map config,dynamic modifiable,String key){
+  final Map? newDependencies = config[key];
+  if (newDependencies == null) {
+    _logger.verbose('配置文件未找到$key节点，请修改');
+    return;
+  }
+  modifiable[key] = newDependencies;
 }
 
 
@@ -135,11 +195,12 @@ Future<Map?> _loadConfigFromUrl(String url) async {
 
 
 Map? _loadConfigFromFile(String? filePath){
+  _logger.verbose('开始查找本地配置文件');
   if (filePath == null) {
-    _logger.verbose('未找到.pubspec.yaml文件');
+    _logger.verbose('未找到本地配置文件');
     return null;
   }
-  _logger.verbose('找到.pubspec.yaml：$filePath');
+  _logger.verbose('找到本地配置文件：$filePath');
   final config = ConfigFile.loadConfigFromPath(filePath);
   if (config == null) {
     _logger.verbose('$filePath内容不存在');
@@ -176,4 +237,3 @@ File? _getPubSpecYamlPath() {
   }
   return pubspecFile;
 }
-
