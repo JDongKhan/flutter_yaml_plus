@@ -15,3 +15,10 @@ or
 build app
 
 dart compile exe bin/flutter_yaml_plus.dart -o pub+
+
+
+or
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/JDongKhan/flutter_yaml_plus/main/install | bash
+```
