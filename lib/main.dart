@@ -83,33 +83,23 @@ Future<void> _start(ArgResults argResults) async {
   }
   _logger.verbose(config);
   //pubspec地址
-  final String? pubspecFilePath = argResults[pubspecOption];
+  String? pubspecFilePath = argResults[pubspecOption];
+  pubspecFilePath ??= '.';
   final List<File> fileList = [];
-  if (pubspecFilePath != null) {
-    final Directory directory = Directory(pubspecFilePath);
-    if (directory.existsSync()) {
-      final String? c = await run('find $pubspecFilePath -name pubspec.yaml');
-      if (c != null) {
-        final List<String> list = c.split('\n');
-        fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
-      }
-    } else {
-      fileList.add(File(pubspecFilePath));
+  final Directory directory = Directory(pubspecFilePath);
+  if (directory.existsSync()) {
+    final String? c = await run('find $pubspecFilePath -name pubspec.yaml');
+    if (c != null) {
+      final List<String> list = c.split('\n');
+      fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
     }
-  }
-
-  //默认
-  if (fileList.isEmpty) {
-    final File? p = _getPubSpecYamlPath();
-    _logger.verbose('找到pubspec.yaml：$p');
-    if (p != null) {
-      fileList.add(p);
-    }
+  } else {
+    fileList.add(File(pubspecFilePath));
   }
 
   ///修改文件
   for (var element in fileList) {
-    _logger.info('开始修改：$element');
+    _logger.info('--------------------------- $element -------------------------------');
     _modPubspec(element, config);
   }
   //clean && pub get
@@ -118,6 +108,7 @@ Future<void> _start(ArgResults argResults) async {
   for (var element in fileList) {
     //重新run pub get
     if (needClean == true) {
+      await run('cd ${element.parent.path} && rm -f pubspec.lock ');
       await run('cd ${element.parent.path} && flutter clean ');
       await Future<dynamic>.delayed(const Duration(seconds: 2));
     }
@@ -147,19 +138,21 @@ void _modConfig(Map config, dynamic modifiable, String key) {
   final Map? newDependencies = config[key];
   final Map? oldDependencies = modifiable[key];
   if (newDependencies == null) {
-    _logger.verbose('配置文件未找到$key节点，请修改');
+    _logger.info('配置文件未找到$key节点');
     return;
   }
   if (oldDependencies == null) {
-    _logger.verbose('pubspec.yaml未找到$key节点，请修改');
+    _logger.info('pubspec.yaml未找到$key节点');
     return;
   }
+  _logger.info('修改节点$key下的配置');
+
   for (var key in oldDependencies.keys) {
     final dynamic value = newDependencies[key];
     // _logger.verbose('检测$key是否需要修改');
     if (value != null) {
       final dynamic newValue = _handleVarMap(value);
-      _logger.verbose('即将修改$key $newValue');
+      _logger.info('修改$key $newValue');
       //这里可以加入自己的逻辑
       oldDependencies[key] = newValue;
     }
