@@ -8,6 +8,8 @@ import 'package:args/args.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
 import 'package:flutter_yaml_plus/src/pubspec_parser.dart';
+import 'package:flutter_yaml_plus/src/push.dart';
+import 'package:flutter_yaml_plus/src/utils.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
 
@@ -23,9 +25,9 @@ const String pubspecOption = 'pubspec';
 const String needCleanOption = 'clean';
 const String needGetOption = 'get';
 const String versionOption = 'version';
+const String pushOption = 'push';
 
 Directory _projectDirectory = Directory.current;
-late FLILogger _logger;
 
 Future<void> modYamlFromArguments(List<String> arguments) async {
   final ArgParser parser = ArgParser(allowTrailingOptions: true);
@@ -50,14 +52,19 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
       help: '指定修改的pubspec.yaml路径',
       defaultsTo: null,
     )
+    ..addOption(
+      pushOption,
+      help: '推送tag',
+      defaultsTo: null,
+    )
     ..addFlag(versionOption, help: '版本', defaultsTo: false)
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
-  _logger = FLILogger(argResults[verboseFlag]);
-  _logger.verbose('Received args ${argResults.arguments}');
+  logger = FLILogger(argResults[verboseFlag]);
+  logger.verbose('Received args ${argResults.arguments}');
   if (argResults[helpFlag]) {
     stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
@@ -67,8 +74,16 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     stdout.writeln(version);
     exit(0);
   }
+
+  Push.start('0.0.1');
+
+  if (argResults[pubspecOption] != null) {
+    Push.start(argResults[pubspecOption]);
+    return;
+  }
+
   await _start(argResults).catchError((onError) {
-    _logger.error(onError.toString());
+    logger.error(onError.toString());
   });
 }
 
@@ -85,17 +100,17 @@ Future<void> _start(ArgResults argResults) async {
     config = _loadConfigFromFile(filePath);
   }
   if (config == null) {
-    _logger.error('配置获取失败');
+    logger.error('配置获取失败');
     return;
   }
-  _logger.verbose(config);
+  logger.verbose(config);
   //pubspec地址
   String? pubspecFilePath = argResults[pubspecOption];
   pubspecFilePath ??= '.';
   final List<File> fileList = [];
   final Directory directory = Directory(pubspecFilePath);
   if (directory.existsSync()) {
-    final String? c = await run('find $pubspecFilePath -name pubspec.yaml');
+    final String? c = await Utils.run('find $pubspecFilePath -name pubspec.yaml');
     if (c != null) {
       final List<String> list = c.split('\n');
       fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
@@ -104,66 +119,79 @@ Future<void> _start(ArgResults argResults) async {
     fileList.add(File(pubspecFilePath));
   }
 
+  final List<File> needCleanFileList = [];
+
   ///修改文件
   for (var element in fileList) {
-    _logger.info('--------------------------- $element -------------------------------');
-    _modPubspec(element, config);
+    logger.info('--------------------------- $element -------------------------------');
+    if (_modPubspec(element, config)) {
+      needCleanFileList.add(element);
+    }
   }
+  logger.verbose('发现文件出现变动:$needCleanFileList');
   //clean && pub get
   final bool needClean = argResults[needCleanOption];
   final bool needGet = argResults[needGetOption];
-  for (var element in fileList) {
+  for (var element in needCleanFileList) {
     //重新run pub get
     if (needClean == true) {
-      await run('cd ${element.parent.path} && rm -f pubspec.lock ');
-      await run('cd ${element.parent.path} && flutter clean ');
+      await Utils.run('cd ${element.parent.path} && rm -f pubspec.lock ');
+      await Utils.run('cd ${element.parent.path} && flutter clean ');
       await Future<dynamic>.delayed(const Duration(seconds: 2));
     }
     if (needGet == true) {
-      await run('cd ${element.parent.path} && flutter pub get ');
+      await Utils.run('cd ${element.parent.path} && flutter pub get ');
     }
   }
 }
 
-void _modPubspec(File pubspecFile, Map config) {
+bool _modPubspec(File pubspecFile, Map config) {
   //读取
   final dynamic pubspecYaml = PubspecParser.fromFileToMap(pubspecFile);
   final dynamic modifiable = getModifiableNode(pubspecYaml);
   //修改dependencies
-  _modConfig(config, modifiable, 'dependencies');
+  final bool result1 = _modConfig(config, modifiable, 'dependencies');
   //修改dependency_overrides
-  _modConfig(config, modifiable, 'dependency_overrides');
+  final bool result2 = _modConfig(config, modifiable, 'dependency_overrides');
   //拷贝将versions全部拷贝过去
   // _copyConfig(config, modifiable, 'versions');
   //保存
   final strYaml = toYamlString(modifiable);
   pubspecFile.writeAsStringSync(strYaml);
-  _logger.verbose('保存$pubspecFile');
+  logger.verbose('保存$pubspecFile');
+
+  return result1 || result2;
 }
 
-void _modConfig(Map config, dynamic modifiable, String key) {
+bool _modConfig(Map config, dynamic modifiable, String key) {
   final Map? newDependencies = config[key];
   final Map? oldDependencies = modifiable[key];
   if (newDependencies == null) {
-    _logger.info('配置文件未找到$key节点');
-    return;
+    logger.info('配置文件未找到$key节点');
+    return false;
   }
   if (oldDependencies == null) {
-    _logger.info('pubspec.yaml未找到$key节点');
-    return;
+    logger.info('pubspec.yaml未找到$key节点');
+    return false;
   }
-  _logger.info('修改节点$key下的配置');
+  logger.info('修改节点$key下的配置');
 
+  bool result = false;
   for (var key in oldDependencies.keys) {
     final dynamic value = newDependencies[key];
     // _logger.verbose('检测$key是否需要修改');
     if (value != null) {
+      final dynamic oldValue = oldDependencies[key];
       final dynamic newValue = _handleVarMap(value);
-      _logger.info('修改$key $newValue');
+      if (oldValue.toString() != newValue.toString()) {
+        result = true;
+      }
+      logger.info('修改$key $newValue');
       //这里可以加入自己的逻辑
       oldDependencies[key] = newValue;
     }
   }
+  return result;
 }
 
 dynamic _handleVarMap(dynamic value) {
@@ -183,47 +211,10 @@ dynamic _handleVarMap(dynamic value) {
 void _copyConfig(Map config, dynamic modifiable, String key) {
   final Map? newDependencies = config[key];
   if (newDependencies == null) {
-    _logger.verbose('配置文件未找到$key节点，请修改');
+    logger.verbose('配置文件未找到$key节点，请修改');
     return;
   }
   modifiable[key] = newDependencies;
-}
-
-///执行脚本
-Future<String?> run(
-  String script, {
-  String? workingDirectory,
-  Map<String, String>? environment,
-  bool includeParentEnvironment = true,
-  bool runInShell = true,
-  ProcessStartMode mode = ProcessStartMode.normal,
-}) async {
-  _logger.info(script);
-  final Completer<String?> completer = Completer();
-  final Process result = await Process.start('sh', ['-c', script]);
-  final StringBuffer stringBuffer = StringBuffer();
-  result.stdout.listen((out) {
-    final String text = utf8.decode(out);
-    _logger.verbose(text);
-    stringBuffer.writeln(text);
-  }, onDone: () {
-    if (!completer.isCompleted) {
-      completer.complete(stringBuffer.toString());
-    }
-  }, onError: (error) {
-    if (!completer.isCompleted) {
-      completer.completeError(error);
-    }
-  });
-  result.stderr.listen((err) {
-    if (!completer.isCompleted) {
-      completer.completeError(err);
-    }
-    final String text = utf8.decode(err);
-    _logger.error(text);
-  });
-  await result.exitCode;
-  return completer.future;
 }
 
 Future<Map?> _loadConfigFromUrl(String url) async {
@@ -238,15 +229,15 @@ Future<Map?> _loadConfigFromUrl(String url) async {
 }
 
 Map? _loadConfigFromFile(String? filePath) {
-  _logger.verbose('开始查找本地配置文件');
+  logger.verbose('开始查找本地配置文件');
   if (filePath == null) {
-    _logger.verbose('未找到本地配置文件');
+    logger.verbose('未找到本地配置文件');
     return null;
   }
-  _logger.verbose('找到本地配置文件：$filePath');
+  logger.verbose('找到本地配置文件：$filePath');
   final config = ConfigFile.loadConfigFromPath(filePath);
   if (config == null) {
-    _logger.verbose('$filePath内容不存在');
+    logger.verbose('$filePath内容不存在');
     return null;
   }
   return config;

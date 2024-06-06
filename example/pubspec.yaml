@@ -7,6 +7,10 @@ dependencies:
   flutter: 
     sdk: flutter
   cupertino_icons: ^1.0.3
+  flutter_yaml_plus: 
+    git: 
+      url: git@git.17usoft.com:mada-app/TCGroundFlutterWebsocket.git
+      ref: 0.0.1
 dev_dependencies: 
   flutter_test: 
     sdk: flutter

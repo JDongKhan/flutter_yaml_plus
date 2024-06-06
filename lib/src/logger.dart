@@ -2,6 +2,9 @@ import 'package:cli_util/cli_logging.dart';
 
 export 'package:cli_util/cli_logging.dart' show Progress;
 
+
+late FLILogger logger;
+
 /// Flutter Launcher Icons Logger
 class FLILogger {
   late Logger _logger;
