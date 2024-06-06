@@ -13,6 +13,7 @@ import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
 
+const version = '1.0.0';
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
@@ -21,6 +22,7 @@ const String otherConfigFilePattern = r'^.pubspec(.*).yaml$';
 const String pubspecOption = 'pubspec';
 const String needCleanOption = 'clean';
 const String needGetOption = 'get';
+const String versionOption = 'version';
 
 Directory _projectDirectory = Directory.current;
 late FLILogger _logger;
@@ -48,6 +50,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
       help: '指定修改的pubspec.yaml路径',
       defaultsTo: null,
     )
+    ..addFlag(versionOption, help: '版本', defaultsTo: false)
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
@@ -58,6 +61,10 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   if (argResults[helpFlag]) {
     stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
+    exit(0);
+  }
+  if (argResults[versionOption]) {
+    stdout.writeln(version);
     exit(0);
   }
   await _start(argResults).catchError((onError) {
