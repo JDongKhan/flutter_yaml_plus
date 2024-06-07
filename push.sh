@@ -17,4 +17,4 @@ sed -i '' "s/const version = .*;/const version = '$version';/g" lib/main.dart
 dart compile exe bin/flutter_yaml_plus.dart -o pub+
 
 git add .
-git commit -m "push"
+git commit -m "push $version"
