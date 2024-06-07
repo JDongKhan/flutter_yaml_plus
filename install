@@ -27,9 +27,13 @@ case "$OS" in
 esac
 
 if [ $platform == "Windows" ]; then
-  echo "不支持的当前的运行平台:$platform"
-  exit  0
+  BIN_NAME="pub+"
+  BIN_DIR="C:\\.$BIN_NAME"
+  BIN_DIR_BIN="$BIN_DIR/bin"
+  SYMLINK_TARGET=""
+  projectName="flutter_yaml_plus"
 fi
+
 
 # Function to log messages with date and time
 log_message() {
@@ -55,75 +59,92 @@ if ! command -v curl &> /dev/null; then
     error "curl is required but not installed."
 fi
 
-# Get installed BIN version if exists
-INSTALLED_VERSION=""
-if command -v $BIN_NAME &> /dev/null; then
-    INSTALLED_VERSION=$($BIN_NAME --version 2>&1) || error "Failed to fetch installed $BIN_NAME version."
-fi
 
-log_message "Local version $INSTALLED_VERSION."
-
-# Define the URL of the BIN binary
-if [ -z "$1" ]; then
-  BIN_VERSION=$(curl -s $versionUrl | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-  if [ -z "$BIN_VERSION" ]; then
-      error "Failed to fetch latest $BIN_NAME version."
+checkVersion(){
+  # Get installed BIN version if exists
+  INSTALLED_VERSION=""
+  if command -v $BIN_NAME &> /dev/null; then
+      INSTALLED_VERSION=$($BIN_NAME --version 2>&1) || error "Failed to fetch installed $BIN_NAME version."
   fi
-else
-  BIN_VERSION="$1"
-fi
 
-log_message "Installing $BIN_NAME version $BIN_VERSION."
+  log_message "Local version $INSTALLED_VERSION."
 
-# Create BIN directory if it doesn't exist
-mkdir -p "$BIN_DIR" || error "Failed to create BIN directory: $BIN_DIR."
-
-# Check if BIN_DIR exists, and if it does delete it
-if [ -d "$BIN_DIR_BIN" ]; then
-    log_message "BIN bin directory already exists. Removing it."
-    if ! rm -rf "$BIN_DIR_BIN"; then
-        error "Failed to remove existing $BIN_NAME directory: $BIN_DIR_BIN."
+  # Define the URL of the BIN binary
+  if [ -z "$1" ]; then
+    BIN_VERSION=$(curl -s $versionUrl | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -z "$BIN_VERSION" ]; then
+        error "Failed to fetch latest $BIN_NAME version."
     fi
-fi
+  else
+    BIN_VERSION="$1"
+  fi
+  log_message "Installing $BIN_NAME version $BIN_VERSION."
+}
 
-# Download BIN
-URL="$downloadUrl/$BIN_VERSION.tar.gz"
-if ! curl -L "$URL" -o $BIN_NAME.tar.gz; then
-    error "Download failed. Check your internet connection and URL: $URL"
-fi
+downloadVersion(){
+  # Create BIN directory if it doesn't exist
+  mkdir -p "$BIN_DIR" || error "Failed to create BIN directory: $BIN_DIR."
 
+  # Check if BIN_DIR exists, and if it does delete it
+  if [ -d "$BIN_DIR_BIN" ]; then
+      log_message "BIN bin directory already exists. Removing it."
+      if ! rm -rf "$BIN_DIR_BIN"; then
+          error "Failed to remove existing $BIN_NAME directory: $BIN_DIR_BIN."
+      fi
+  fi
 
-# Extract binary to the new location
-if ! tar xzf $BIN_NAME.tar.gz -C "$BIN_DIR" 2>&1; then
-    error "Extraction failed. Check permissions and tar.gz file integrity."
-fi
+  # Download BIN
+  URL="$downloadUrl/$BIN_VERSION.tar.gz"
+  if ! curl -L "$URL" -o $BIN_NAME.tar.gz; then
+      error "Download failed. Check your internet connection and URL: $URL"
+  fi
 
-# Cleanup
-if ! rm -f $BIN_NAME.tar.gz; then
-    error "Failed to cleanup"
-fi
+  # Extract binary to the new location
+  if ! tar xzf $BIN_NAME.tar.gz -C "$BIN_DIR" 2>&1; then
+      error "Extraction failed. Check permissions and tar.gz file integrity."
+  fi
 
-mkdir -p "$BIN_DIR_BIN" || error "Failed to create bin directory: $BIN_DIR_BIN."
-# Rename
-if ! mv "$BIN_DIR/$projectName-$BIN_VERSION/$BIN_NAME" "$BIN_DIR_BIN/"; then
-    error "Failed to move $BIN_NAME to bin directory."
-fi
+  # Cleanup
+  if ! rm -f $BIN_NAME.tar.gz; then
+      error "Failed to cleanup"
+  fi
 
-# Create a symlink
-if ! ln -sf "$BIN_DIR_BIN/$BIN_NAME" "$SYMLINK_TARGET"; then
-    error "Failed to create symlink."
-fi
+}
 
-# Verify installation
-if ! command -v $BIN_NAME &> /dev/null; then
-    error "Installation verification failed. $BIN_NAME may not be in PATH or failed to execute."
-fi
+install(){
+  mkdir -p "$BIN_DIR_BIN" || error "Failed to create bin directory: $BIN_DIR_BIN."
+  # Rename
+  if ! mv "$BIN_DIR/$projectName-$BIN_VERSION/$BIN_NAME" "$BIN_DIR_BIN/"; then
+      error "Failed to move $BIN_NAME to bin directory."
+  fi
 
-# Cleanup
-if ! rm -rf $BIN_DIR/$projectName-$BIN_VERSION; then
-    error "Failed to cleanup $BIN_DIR/$projectName-$BIN_VERSION"
-fi
+ # Cleanup
+  if ! rm -rf $BIN_DIR/$projectName-$BIN_VERSION; then
+      error "Failed to cleanup $BIN_DIR/$projectName-$BIN_VERSION"
+  fi
 
-INSTALLED_VERSION=$($BIN_NAME --version 2>&1) || error "Failed to verify installed $BIN_NAME version."
-success "$BIN_NAME $INSTALLED_VERSION installed successfully."
+  if [ $SYMLINK_TARGET != '' ]; then
+      # Create a symlink
+      if ! ln -sf "$BIN_DIR_BIN/$BIN_NAME" "$SYMLINK_TARGET"; then
+          error "Failed to create symlink."
+      fi
 
+      # Verify installation
+      if ! command -v $BIN_NAME &> /dev/null; then
+          error "Installation verification failed. $BIN_NAME may not be in PATH or failed to execute."
+      fi
+
+      INSTALLED_VERSION=$($BIN_NAME --version 2>&1) || error "Failed to verify installed $BIN_NAME version."
+      success "$BIN_NAME $INSTALLED_VERSION installed successfully."
+  else
+    success "$BIN_NAME $BIN_VERSION installed successfully $BIN_DIR_BIN. Please config it to environment."
+  fi
+
+}
+
+#检查版本
+checkVersion
+#下载
+downloadVersion
+#安装
+install
