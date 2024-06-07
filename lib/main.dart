@@ -1,14 +1,17 @@
 // ignore_for_file: public_member_api_docs
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_yaml_plus/src/command/clean.dart';
+import 'package:flutter_yaml_plus/src/command/command.dart';
+import 'package:flutter_yaml_plus/src/command/doctor.dart';
+import 'package:flutter_yaml_plus/src/command/get.dart';
+import 'package:flutter_yaml_plus/src/command/upgrade.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
 import 'package:flutter_yaml_plus/src/pubspec_parser.dart';
-import 'package:flutter_yaml_plus/src/push.dart';
 import 'package:flutter_yaml_plus/src/utils.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml_modify/yaml_modify.dart';
@@ -28,6 +31,8 @@ const String versionOption = 'version';
 const String pushOption = 'push';
 
 Directory _projectDirectory = Directory.current;
+
+List<Command> _commandList = [CleanCommand(), GetCommand(), DoctorCommand(), UpgradeCommand()];
 
 Future<void> modYamlFromArguments(List<String> arguments) async {
   final ArgParser parser = ArgParser(allowTrailingOptions: true);
@@ -61,25 +66,37 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
+
+  for (var element in _commandList) {
+    parser.addCommand(element.name);
+  }
+
   final ArgResults argResults = parser.parse(arguments);
   // creating logger based on -v flag
   logger = FLILogger(argResults[verboseFlag]);
   logger.verbose('Received args ${argResults.arguments}');
+  //help
   if (argResults[helpFlag]) {
     stdout.writeln('pubspec.yaml增强');
     stdout.writeln(parser.usage);
     exit(0);
   }
+  //version
   if (argResults[versionOption]) {
     stdout.writeln(version);
     exit(0);
   }
-
-  if (argResults[pubspecOption] != null) {
-    Push.start(argResults[pubspecOption]);
-    return;
+  //其他命令行工具
+  final ArgResults? command = argResults.command;
+  if (command != null) {
+    for (var element in _commandList) {
+      if (command.name == element.name) {
+        await element.parser(command.arguments);
+        exit(0);
+      }
+    }
   }
-
+  //找到.pubspec(.*).yaml文件 把里面的配置文件替换到整个仓库下所有的pubspec.yaml文件中
   await _start(argResults).catchError((onError) {
     logger.error(onError.toString());
   });

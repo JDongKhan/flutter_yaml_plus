@@ -8,7 +8,7 @@ import 'package:yaml_modify/yaml_modify.dart';
 /// @author jd
 
 ///统一打tag
-
+@Deprecated('废弃')
 class Push {
   static void start(String version) async {
     final String? c = await Utils.run('find . -name pubspec.yaml');
