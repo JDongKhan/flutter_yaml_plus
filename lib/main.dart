@@ -18,7 +18,7 @@ import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
 
-const version = '';
+const version = '1.1.0';
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
