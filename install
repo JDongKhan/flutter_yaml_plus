@@ -9,6 +9,28 @@ BIN_DIR_BIN="$BIN_DIR/bin"
 SYMLINK_TARGET="/usr/local/bin/$BIN_NAME"
 projectName="flutter_yaml_plus"
 
+OS=$(uname -s)
+platform=""
+case "$OS" in
+  Linux*)
+    platform="Linux"
+    ;;
+  Darwin*)
+    platform="macOS"
+    ;;
+  CYGWIN*|MINGW32*|MSYS*|MINGW*)
+    platform="Windows"
+    ;;
+  *)
+    platform="Unknown"
+    ;;
+esac
+
+if [ $platform == "Windows" ]; then
+  echo "不支持的当前的运行平台:$platform"
+  exit  0
+fi
+
 # Function to log messages with date and time
 log_message() {
     echo -e "$1"
