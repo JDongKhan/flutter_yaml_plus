@@ -1,8 +1,8 @@
 versions:
-  version1: &foundation_version 1.0
+  version1: &foundation_version pay_1.0
 dependencies:
   flutter_tc_foundation: &flutter_tc_foundation
     git:
-      url: git@git.17usoft.com:mada-app/flutter_tc_foundation.git
+      url: test
       ref: *foundation_version
       path: flutter_tc_foundation
