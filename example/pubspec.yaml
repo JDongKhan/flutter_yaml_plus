@@ -7,6 +7,11 @@ dependencies:
   flutter: 
     sdk: flutter
   cupertino_icons: ^1.0.3
+  flutter_tc_foundation: 
+    git: 
+      url: test
+      ref: pay_1.0
+      path: flutter_tc_foundation
 dev_dependencies: 
   flutter_test: 
     sdk: flutter

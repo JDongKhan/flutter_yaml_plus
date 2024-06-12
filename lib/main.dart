@@ -18,7 +18,7 @@ import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
 
-const version = '1.2.0';
+const version = '';
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
@@ -29,6 +29,7 @@ const String needCleanOption = 'clean';
 const String needGetOption = 'get';
 const String versionOption = 'version';
 const String pushOption = 'push';
+const String allOption = 'all';
 
 Directory _projectDirectory = Directory.current;
 
@@ -65,6 +66,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     ..addFlag(versionOption, help: '版本', defaultsTo: false)
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
+    ..addFlag(allOption, abbr: 'a', help: 'clean or get all', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
 
   for (var element in _commandList) {
@@ -147,7 +149,9 @@ Future<void> _start(ArgResults argResults) async {
   //clean && pub get
   final bool needClean = argResults[needCleanOption];
   final bool needGet = argResults[needGetOption];
-  for (var element in needCleanFileList) {
+  final bool all = argResults[allOption];
+  final List<File> list = all ? fileList : needCleanFileList;
+  for (var element in list) {
     //重新run pub get
     if (needClean == true) {
       await Utils.run('cd ${element.parent.path} && rm -f pubspec.lock ');
@@ -197,9 +201,18 @@ bool _modConfig(Map config, dynamic modifiable, String key) {
     // _logger.verbose('检测$key是否需要修改');
     if (value != null) {
       final dynamic oldValue = oldDependencies[key];
-      final dynamic newValue = _handleVarMap(value);
+      Map newValue = _handleVarMap(value);
       if (oldValue.toString() != newValue.toString()) {
         result = true;
+      }
+      final dynamic path = newValue['path'];
+      if (path != null) {
+        final Directory directory = Directory(path);
+        if (directory.existsSync()) {
+          newValue = {'path': path};
+        } else {
+          newValue.remove('path');
+        }
       }
       logger.info('修改$key $newValue');
       //这里可以加入自己的逻辑
