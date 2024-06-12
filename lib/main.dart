@@ -18,7 +18,7 @@ import 'package:yaml_modify/yaml_modify.dart';
 
 import 'src/config_file.dart';
 
-const version = '1.0.3';
+const version = '1.0.4';
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
@@ -30,6 +30,7 @@ const String needGetOption = 'get';
 const String versionOption = 'version';
 const String pushOption = 'push';
 const String allOption = 'all';
+const String updateOption = 'update';
 
 Directory _projectDirectory = Directory.current;
 
@@ -67,6 +68,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(allOption, abbr: 'a', help: 'clean or get all', defaultsTo: false)
+    ..addFlag(updateOption,  help: 'update', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
 
   for (var element in _commandList) {
@@ -86,6 +88,11 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
   //version
   if (argResults[versionOption]) {
     stdout.writeln(version);
+    exit(0);
+  }
+  //update
+  if (argResults[updateOption]) {
+    Utils.run('curl -fsSL https://raw.githubusercontent.com/JDongKhan/flutter_yaml_plus/main/install | bash');
     exit(0);
   }
   //其他命令行工具
