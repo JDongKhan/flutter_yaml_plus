@@ -4,7 +4,7 @@ version=""
 while [ -n "$1" ]
 do
     case "$1" in
-        -version) version="$2"
+        --version) version="$2"
             shift ;;
         --) shift
         break ;;
