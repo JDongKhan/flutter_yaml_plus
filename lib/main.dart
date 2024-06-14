@@ -11,11 +11,10 @@ import 'package:flutter_yaml_plus/src/command/doctor.dart';
 import 'package:flutter_yaml_plus/src/command/get.dart';
 import 'package:flutter_yaml_plus/src/command/upgrade.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
-import 'package:flutter_yaml_plus/src/pubspec_parser.dart';
 import 'package:flutter_yaml_plus/src/utils.dart';
 import 'package:path/path.dart' as path;
-import 'package:yaml_modify/yaml_modify.dart';
-
+import 'package:yaml/yaml.dart';
+import 'package:yaml_edit/yaml_edit.dart';
 import 'src/config_file.dart';
 
 const version = '1.2.1';
@@ -68,7 +67,7 @@ Future<void> modYamlFromArguments(List<String> arguments) async {
     ..addFlag(needCleanOption, abbr: 'c', help: 'clean 项目', defaultsTo: false)
     ..addFlag(needGetOption, abbr: 'g', help: 'get 项目', defaultsTo: false)
     ..addFlag(allOption, abbr: 'a', help: 'clean or get all', defaultsTo: false)
-    ..addFlag(updateOption,  help: 'update', defaultsTo: false)
+    ..addFlag(updateOption, help: 'update', defaultsTo: false)
     ..addFlag(verboseFlag, abbr: 'v', help: 'Verbose output', defaultsTo: false);
 
   for (var element in _commandList) {
@@ -173,34 +172,34 @@ Future<void> _start(ArgResults argResults) async {
 
 bool _modPubspec(File pubspecFile, Map config) {
   //读取
-  final dynamic pubspecYaml = PubspecParser.fromFileToMap(pubspecFile);
-  final dynamic modifiable = getModifiableNode(pubspecYaml);
+  final String yamlString = pubspecFile.readAsStringSync();
+  final YamlEditor yamlEditor = YamlEditor(yamlString);
+  final YamlMap yamlMap = loadYaml(yamlString);
   //修改dependencies
-  final bool result1 = _modConfig(config, modifiable, 'dependencies');
+  final bool result1 = _modConfig(config, yamlMap, yamlEditor, 'dependencies');
   //修改dependency_overrides
-  final bool result2 = _modConfig(config, modifiable, 'dependency_overrides');
+  final bool result2 = _modConfig(config, yamlMap, yamlEditor, 'dependency_overrides');
   //拷贝将versions全部拷贝过去
   // _copyConfig(config, modifiable, 'versions');
   //保存
-  final strYaml = toYamlString(modifiable);
-  pubspecFile.writeAsStringSync(strYaml);
+  pubspecFile.writeAsStringSync(yamlEditor.toString());
   logger.verbose('保存$pubspecFile');
 
   return result1 || result2;
 }
 
-bool _modConfig(Map config, dynamic modifiable, String key) {
-  final Map? newDependencies = config[key];
-  final Map? oldDependencies = modifiable[key];
+bool _modConfig(Map config, YamlMap yamlMap, YamlEditor yamlEditor, String parentKey) {
+  final Map? newDependencies = config[parentKey];
+  final Map? oldDependencies = yamlMap[parentKey];
   if (newDependencies == null) {
-    logger.info('配置文件未找到$key节点');
+    logger.info('配置文件未找到$parentKey节点');
     return false;
   }
   if (oldDependencies == null) {
-    logger.info('pubspec.yaml未找到$key节点');
+    logger.info('pubspec.yaml未找到$parentKey节点');
     return false;
   }
-  logger.info('修改节点$key下的配置');
+  logger.info('修改节点$parentKey下的配置');
 
   bool result = false;
   for (var key in oldDependencies.keys) {
@@ -223,7 +222,11 @@ bool _modConfig(Map config, dynamic modifiable, String key) {
       }
       logger.info('修改$key $newValue');
       //这里可以加入自己的逻辑
-      oldDependencies[key] = newValue;
+      try {
+        yamlEditor.update([parentKey, key], newValue);
+      } catch (e) {
+        logger.error(e);
+      }
     }
   }
   return result;
