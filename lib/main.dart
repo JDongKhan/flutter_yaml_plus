@@ -119,7 +119,7 @@ Future<void> _start(ArgResults argResults) async {
   } else {
     //本地配置
     String? filePath = argResults[fileOption];
-    filePath ??= _getFilePath();
+    filePath ??= Utils.findFilePath('.', otherConfigFilePattern,reg: true).firstOrNull;
     config = _loadConfigFromFile(filePath);
   }
   if (config == null) {
@@ -133,11 +133,12 @@ Future<void> _start(ArgResults argResults) async {
   final List<File> fileList = [];
   final Directory directory = Directory(pubspecFilePath);
   if (directory.existsSync()) {
-    final String? c = await Utils.run('find $pubspecFilePath -name pubspec.yaml');
-    if (c != null) {
-      final List<String> list = c.split('\n');
-      fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
-    }
+    fileList.addAll(Utils.findFile(pubspecFilePath, 'pubspec.yaml',recursive: true));
+    // final String? c = await Utils.run('find $pubspecFilePath -name pubspec.yaml');
+    // if (c != null) {
+    //   final List<String> list = c.split('\n');
+    //   fileList.addAll(list.where((element) => element.isNotEmpty).map<File>((e) => File(e)).toList());
+    // }
   } else {
     fileList.add(File(pubspecFilePath));
   }
@@ -267,7 +268,6 @@ Future<Map?> _loadConfigFromUrl(String url) async {
 }
 
 Map? _loadConfigFromFile(String? filePath) {
-  logger.verbose('开始查找本地配置文件');
   if (filePath == null) {
     logger.verbose('未找到本地配置文件');
     return null;
@@ -279,20 +279,6 @@ Map? _loadConfigFromFile(String? filePath) {
     return null;
   }
   return config;
-}
-
-///查找项目里面有没有自定义配置文件
-String? _getFilePath() {
-  for (var item in Directory('.').listSync()) {
-    if (item is File) {
-      final name = path.basename(item.path);
-      final match = RegExp(otherConfigFilePattern).firstMatch(name);
-      if (match != null) {
-        return item.path;
-      }
-    }
-  }
-  return null;
 }
 
 ///查找项目的dart项目配置文件
