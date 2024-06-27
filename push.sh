@@ -13,7 +13,8 @@ do
     shift
 done
 
-sed -i '' "s/const version = .*;/const version = '$version';/g" lib/main.dart
+sed -i '' "s/const version = .*;/const version = '$version';/g" lib/src/version.g.dart
+sed -i "" "s/^version: .*/version: $version/" pubspec.yaml
 dart compile exe bin/flutter_yaml_plus.dart -o pub+
 
 git add .

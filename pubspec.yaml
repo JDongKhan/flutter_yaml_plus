@@ -1,6 +1,6 @@
 name: flutter_yaml_plus
 description: pubspec.yaml增强.
-version: 0.0.1
+version: 1.2.5
 maintainer: JD
 homepage: https://github.com/JDongKhan/flutter_yaml_plus.git
 repository: https://github.com/JDongKhan/flutter_yaml_plus.git
@@ -11,6 +11,7 @@ dependencies:
   checked_yaml: ^2.0.2
   path: ^1.8.2
   yaml_edit: ^2.2.1
+  platform: ^3.1.4
   dio: ^4.0.6
 environment: 
   sdk: '>=3.0.0 <4.0.0'

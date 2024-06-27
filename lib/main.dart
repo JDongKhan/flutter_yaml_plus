@@ -12,12 +12,11 @@ import 'package:flutter_yaml_plus/src/command/get.dart';
 import 'package:flutter_yaml_plus/src/command/upgrade.dart';
 import 'package:flutter_yaml_plus/src/logger.dart';
 import 'package:flutter_yaml_plus/src/utils.dart';
+import 'package:flutter_yaml_plus/src/version.g.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 import 'src/config_file.dart';
-
-const version = '1.2.5';
 const String fileOption = 'file';
 const String urlOption = 'url';
 const String helpFlag = 'help';
@@ -161,12 +160,12 @@ Future<void> _start(ArgResults argResults) async {
   for (var element in list) {
     //重新run pub get
     if (needClean == true) {
-      await Utils.run('cd ${element.parent.path} && rm -f pubspec.lock ');
-      await Utils.run('cd ${element.parent.path} && flutter clean ');
+      await Utils.run('flutter clean ',workingDirectory: element.parent.path);
+      await Utils.run('rm -f pubspec.lock ',workingDirectory: element.parent.path);
       await Future<dynamic>.delayed(const Duration(seconds: 2));
     }
     if (needGet == true) {
-      await Utils.run('cd ${element.parent.path} && flutter pub get ');
+      await Utils.run('flutter pub get ',workingDirectory: element.parent.path);
     }
   }
 }
